@@ -1,8 +1,25 @@
+import { createClient } from '@supabase/supabase-js';
+import type { Leader } from '@/data/leaders';
 
-import Database from 'better-sqlite3';
+// Supabase configuration
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Database schema creation function (run this once to set up your tables)
+export const initializeDatabase = async () => {
+  // Note: You'll need to run these SQL commands in your Supabase SQL editor
+  console.log('Database initialization should be done via Supabase SQL editor');
+};
+
 import path from 'path';
 import fs from 'fs';
-import type { Leader } from '@/data/leaders';
+import Database from 'better-sqlite3';
 
 // For this prototype, we'll use a simple file-based SQLite database.
 // In a production app, you'd use a more robust database solution.

@@ -1,7 +1,7 @@
-
 'use server';
 
-import { db } from '@/lib/db';
+import { supabase } from '@/lib/db';
+import type { Leader } from '@/data/leaders';
 import type { User } from './users';
 import { getUsers } from './users';
 import type { RunResult } from 'better-sqlite3';
@@ -155,12 +155,12 @@ export async function addLeader(leaderData: Omit<Leader, 'id' | 'rating' | 'revi
         status: 'pending', // New leaders are pending approval
         adminComment: null,
     };
-    
+
     const stmt = db.prepare(`
         INSERT INTO leaders (id, name, partyName, gender, age, photoUrl, constituency, nativeAddress, electionType, location_state, location_district, rating, reviewCount, previousElections, manifestoUrl, twitterUrl, addedByUserId, createdAt, status, adminComment)
         VALUES (@id, @name, @partyName, @gender, @age, @photoUrl, @constituency, @nativeAddress, @electionType, @location_state, @location_district, @rating, @reviewCount, @previousElections, @manifestoUrl, @twitterUrl, @addedByUserId, @createdAt, @status, @adminComment)
     `);
-    
+
     stmt.run({
         id: newLeader.id,
         name: newLeader.name,
@@ -202,7 +202,7 @@ export async function updateLeader(leaderId: string, leaderData: Omit<Leader, 'i
     if (!leaderToUpdate) {
         throw new Error("Leader not found.");
     }
-    
+
     // Authorization: Only the original submitter or an admin can edit.
     if (!isAdmin && leaderToUpdate.addedByUserId !== userId) {
         throw new Error("You are not authorized to edit this leader.");
@@ -273,7 +273,7 @@ export async function submitRatingAndComment(leaderId: string, userId: string, n
         // 1. Find existing rating
         const ratingStmt = db.prepare('SELECT rating FROM ratings WHERE userId = ? AND leaderId = ?');
         const existingRating = ratingStmt.get(userId, leaderId) as { rating: number } | undefined;
-        
+
         // 2. Insert or update rating. createdAt is only set on the initial insert.
         const upsertRatingStmt = db.prepare(`
             INSERT INTO ratings (userId, leaderId, rating, createdAt, updatedAt, socialBehaviour)
@@ -348,7 +348,7 @@ export async function getReviewsForLeader(leaderId: string): Promise<Review[]> {
         WHERE r.leaderId = ?
         ORDER BY r.updatedAt DESC
     `);
-    
+
     const reviews = stmt.all(leaderId) as any[];
     return Promise.resolve(reviews.map(r => ({ ...r })));
 }
@@ -395,7 +395,7 @@ export async function getActivitiesForUser(userId: string): Promise<UserActivity
         WHERE r.userId = ?
         ORDER BY r.updatedAt DESC
     `);
-    
+
     const activities = stmt.all(userId) as any[];
 
     return Promise.resolve(activities.map(mapDbActivityToUserActivity));
@@ -417,7 +417,7 @@ export async function getAllActivities(): Promise<UserActivity[]> {
         LEFT JOIN comments c ON r.userId = c.userId AND r.leaderId = c.leaderId
         ORDER BY r.updatedAt DESC
     `);
-    
+
     const activities = stmt.all() as any[];
     return Promise.resolve(activities.map(mapDbActivityToUserActivity));
 }
@@ -475,7 +475,7 @@ export async function getRatingCount(filters?: { startDate?: string, endDate?: s
         conditions.push('l.constituency LIKE ?');
         params.push(`%${filters.constituency}%`);
     }
-    
+
     if (needsJoin) {
         query += ' JOIN leaders l ON r.leaderId = l.id';
     }
@@ -483,7 +483,7 @@ export async function getRatingCount(filters?: { startDate?: string, endDate?: s
     if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
     }
-    
+
     const { count } = db.prepare(query).get(...params) as { count: number };
     return Promise.resolve(count);
 }
@@ -526,7 +526,7 @@ export async function getLeadersForAdminPanel(filters: {
   }
 
   query += ' ORDER BY l.createdAt DESC';
-  
+
   const stmt = db.prepare(query);
   const dbLeaders = stmt.all(...params) as any[];
   return Promise.resolve(dbLeaders.map(dbToLeader));
@@ -550,7 +550,7 @@ export async function deleteLeader(leaderId: string): Promise<void> {
         // Explicitly delete dependent records first to ensure foreign key constraints are met.
         db.prepare('DELETE FROM ratings WHERE leaderId = ?').run(id);
         db.prepare('DELETE FROM comments WHERE leaderId = ?').run(id);
-        
+
         // Now delete the leader.
         db.prepare('DELETE FROM leaders WHERE id = ?').run(id);
     });
