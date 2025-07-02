@@ -1,10 +1,7 @@
+
 'use server';
 
 import { supabase } from '@/lib/db';
-import type { Leader } from '@/data/leaders';
-import type { User } from './users';
-import { getUsers } from './users';
-import type { RunResult } from 'better-sqlite3';
 
 export interface Leader {
   id: string;
@@ -68,70 +65,34 @@ export interface SocialBehaviourDistribution {
   count: number;
 }
 
-
 // --- DB data transformation ---
 function dbToLeader(dbLeader: any): Leader {
     return {
         id: dbLeader.id,
         name: dbLeader.name,
-        partyName: dbLeader.partyName,
+        partyName: dbLeader.partyName || dbLeader.party_name,
         gender: dbLeader.gender,
         age: dbLeader.age,
-        photoUrl: dbLeader.photoUrl,
+        photoUrl: dbLeader.photoUrl || dbLeader.photo_url,
         constituency: dbLeader.constituency,
-        nativeAddress: dbLeader.nativeAddress,
-        electionType: dbLeader.electionType,
+        nativeAddress: dbLeader.nativeAddress || dbLeader.native_address,
+        electionType: dbLeader.electionType || dbLeader.election_type,
         location: {
             state: dbLeader.location_state,
             district: dbLeader.location_district,
         },
-        rating: dbLeader.rating,
-        reviewCount: dbLeader.reviewCount,
-        previousElections: JSON.parse(dbLeader.previousElections || '[]'),
-        manifestoUrl: dbLeader.manifestoUrl,
-        twitterUrl: dbLeader.twitterUrl,
-        addedByUserId: dbLeader.addedByUserId,
-        createdAt: dbLeader.createdAt,
-        status: dbLeader.status,
-        adminComment: dbLeader.adminComment,
-        userName: dbLeader.userName,
-    };
-}
-
-function mapDbActivityToUserActivity(activity: any): UserActivity {
-    const leaderData = dbToLeader({
-        id: activity.leader_id,
-        name: activity.leader_name,
-        partyName: activity.leader_partyName,
-        gender: activity.leader_gender,
-        age: activity.leader_age,
-        photoUrl: activity.leader_photoUrl,
-        constituency: activity.leader_constituency,
-        nativeAddress: activity.leader_nativeAddress,
-        electionType: activity.leader_electionType,
-        location_state: activity.leader_location_state,
-        location_district: activity.leader_location_district,
-        rating: activity.leader_rating,
-        reviewCount: activity.leader_reviewCount,
-        previousElections: activity.leader_previousElections, // Already a string
-        manifestoUrl: activity.leader_manifestoUrl,
-        twitterUrl: activity.leader_twitterUrl,
-        addedByUserId: activity.leader_addedByUserId,
-        createdAt: activity.leader_createdAt,
-        status: activity.leader_status,
-        adminComment: activity.leader_adminComment,
-    });
-
-    return {
-        leaderId: activity.leaderId,
-        leaderName: activity.leader_name,
-        leaderPhotoUrl: activity.leader_photoUrl,
-        rating: activity.rating,
-        comment: activity.comment,
-        updatedAt: activity.updatedAt,
-        socialBehaviour: activity.socialBehaviour,
-        userName: activity.userName,
-        leader: leaderData,
+        rating: dbLeader.rating || 0,
+        reviewCount: dbLeader.reviewCount || dbLeader.review_count || 0,
+        previousElections: typeof dbLeader.previousElections === 'string' 
+            ? JSON.parse(dbLeader.previousElections || '[]')
+            : dbLeader.previousElections || [],
+        manifestoUrl: dbLeader.manifestoUrl || dbLeader.manifesto_url,
+        twitterUrl: dbLeader.twitterUrl || dbLeader.twitter_url,
+        addedByUserId: dbLeader.addedByUserId || dbLeader.added_by_user_id,
+        createdAt: dbLeader.createdAt || dbLeader.created_at,
+        status: dbLeader.status || 'pending',
+        adminComment: dbLeader.adminComment || dbLeader.admin_comment,
+        userName: dbLeader.userName || dbLeader.user_name,
     };
 }
 
@@ -139,61 +100,71 @@ function mapDbActivityToUserActivity(activity: any): UserActivity {
 
 // Gets only approved leaders for the public site
 export async function getLeaders(): Promise<Leader[]> {
-  const stmt = db.prepare("SELECT * FROM leaders WHERE status = 'approved'");
-  const dbLeaders = stmt.all() as any[];
-  return Promise.resolve(dbLeaders.map(dbToLeader));
+  try {
+    const { data, error } = await supabase
+      .from('leaders')
+      .select('*')
+      .eq('status', 'approved');
+    
+    if (error) {
+      console.error('Error fetching leaders:', error);
+      return [];
+    }
+    
+    return (data || []).map(dbToLeader);
+  } catch (error) {
+    console.error('Error in getLeaders:', error);
+    return [];
+  }
 }
 
 export async function addLeader(leaderData: Omit<Leader, 'id' | 'rating' | 'reviewCount' | 'addedByUserId' | 'createdAt' | 'status' | 'adminComment' | 'userName'>, userId: string | null): Promise<void> {
-    const newLeader: Leader = {
-        ...leaderData,
+    const newLeader = {
         id: new Date().getTime().toString(),
+        name: leaderData.name,
+        party_name: leaderData.partyName,
+        gender: leaderData.gender,
+        age: leaderData.age,
+        photo_url: leaderData.photoUrl,
+        constituency: leaderData.constituency,
+        native_address: leaderData.nativeAddress,
+        election_type: leaderData.electionType,
+        location_state: leaderData.location.state,
+        location_district: leaderData.location.district,
         rating: 0,
-        reviewCount: 0,
-        addedByUserId: userId,
-        createdAt: new Date().toISOString(),
-        status: 'pending', // New leaders are pending approval
-        adminComment: null,
+        review_count: 0,
+        previous_elections: JSON.stringify(leaderData.previousElections),
+        manifesto_url: leaderData.manifestoUrl,
+        twitter_url: leaderData.twitterUrl,
+        added_by_user_id: userId,
+        created_at: new Date().toISOString(),
+        status: 'pending',
+        admin_comment: null,
     };
 
-    const stmt = db.prepare(`
-        INSERT INTO leaders (id, name, partyName, gender, age, photoUrl, constituency, nativeAddress, electionType, location_state, location_district, rating, reviewCount, previousElections, manifestoUrl, twitterUrl, addedByUserId, createdAt, status, adminComment)
-        VALUES (@id, @name, @partyName, @gender, @age, @photoUrl, @constituency, @nativeAddress, @electionType, @location_state, @location_district, @rating, @reviewCount, @previousElections, @manifestoUrl, @twitterUrl, @addedByUserId, @createdAt, @status, @adminComment)
-    `);
+    const { error } = await supabase
+        .from('leaders')
+        .insert([newLeader]);
 
-    stmt.run({
-        id: newLeader.id,
-        name: newLeader.name,
-        partyName: newLeader.partyName,
-        gender: newLeader.gender,
-        age: newLeader.age,
-        photoUrl: newLeader.photoUrl,
-        constituency: newLeader.constituency,
-        nativeAddress: newLeader.nativeAddress,
-        electionType: newLeader.electionType,
-        location_state: newLeader.location.state,
-        location_district: newLeader.location.district,
-        rating: newLeader.rating,
-        reviewCount: newLeader.reviewCount,
-        previousElections: JSON.stringify(newLeader.previousElections),
-        manifestoUrl: newLeader.manifestoUrl,
-        twitterUrl: newLeader.twitterUrl,
-        addedByUserId: newLeader.addedByUserId,
-        createdAt: newLeader.createdAt,
-        status: newLeader.status,
-        adminComment: newLeader.adminComment,
-    });
-
-    return Promise.resolve();
+    if (error) {
+        console.error('Error adding leader:', error);
+        throw new Error('Failed to add leader');
+    }
 }
 
 export async function getLeaderById(id: string): Promise<Leader | null> {
-    const stmt = db.prepare('SELECT * FROM leaders WHERE id = ?');
-    const dbLeader = stmt.get(id) as any;
-    if (dbLeader) {
-        return Promise.resolve(dbToLeader(dbLeader));
+    const { data, error } = await supabase
+        .from('leaders')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (error) {
+        console.error('Error fetching leader:', error);
+        return null;
     }
-    return Promise.resolve(null);
+
+    return data ? dbToLeader(data) : null;
 }
 
 export async function updateLeader(leaderId: string, leaderData: Omit<Leader, 'id' | 'rating' | 'reviewCount' | 'addedByUserId' | 'createdAt' | 'status' | 'adminComment' | 'userName'>, userId: string | null, isAdmin: boolean): Promise<Leader | null> {
@@ -211,121 +182,114 @@ export async function updateLeader(leaderId: string, leaderData: Omit<Leader, 'i
     let newStatus: Leader['status'];
     let newAdminComment: string | null | undefined;
 
-    // This is the core logic for the re-approval workflow.
     if (isAdmin) {
-        // When an admin edits, they are not changing the approval status here.
-        // Status is managed separately in the admin panel.
         newStatus = leaderToUpdate.status;
         newAdminComment = leaderToUpdate.adminComment;
     } else {
-        // When a non-admin user edits, we must force a re-approval.
         newStatus = 'pending';
         newAdminComment = 'User updated details. Pending re-approval.';
     }
 
-    const stmt = db.prepare(`
-        UPDATE leaders
-        SET name = @name,
-            partyName = @partyName,
-            gender = @gender,
-            age = @age,
-            photoUrl = @photoUrl,
-            constituency = @constituency,
-            nativeAddress = @nativeAddress,
-            electionType = @electionType,
-            location_state = @location_state,
-            location_district = @location_district,
-            previousElections = @previousElections,
-            manifestoUrl = @manifestoUrl,
-            twitterUrl = @twitterUrl,
-            status = @status,
-            adminComment = @adminComment
-        WHERE id = @id
-    `);
-
-    stmt.run({
-        id: leaderId,
+    const updateData = {
         name: leaderData.name,
-        partyName: leaderData.partyName,
+        party_name: leaderData.partyName,
         gender: leaderData.gender,
         age: leaderData.age,
-        photoUrl: leaderData.photoUrl,
+        photo_url: leaderData.photoUrl,
         constituency: leaderData.constituency,
-        nativeAddress: leaderData.nativeAddress,
-        electionType: leaderData.electionType,
+        native_address: leaderData.nativeAddress,
+        election_type: leaderData.electionType,
         location_state: leaderData.location.state,
         location_district: leaderData.location.district,
-        previousElections: JSON.stringify(leaderData.previousElections),
-        manifestoUrl: leaderData.manifestoUrl,
-        twitterUrl: leaderData.twitterUrl,
+        previous_elections: JSON.stringify(leaderData.previousElections),
+        manifesto_url: leaderData.manifestoUrl,
+        twitter_url: leaderData.twitterUrl,
         status: newStatus,
-        adminComment: newAdminComment,
-    });
+        admin_comment: newAdminComment,
+    };
+
+    const { error } = await supabase
+        .from('leaders')
+        .update(updateData)
+        .eq('id', leaderId);
+
+    if (error) {
+        console.error('Error updating leader:', error);
+        throw new Error('Failed to update leader');
+    }
 
     return getLeaderById(leaderId);
 }
 
-
 export async function submitRatingAndComment(leaderId: string, userId: string, newRating: number, comment: string | null, socialBehaviour: string | null): Promise<Leader | null> {
-    const transaction = db.transaction(() => {
+    try {
         const now = new Date().toISOString();
 
-        // 1. Find existing rating
-        const ratingStmt = db.prepare('SELECT rating FROM ratings WHERE userId = ? AND leaderId = ?');
-        const existingRating = ratingStmt.get(userId, leaderId) as { rating: number } | undefined;
+        // Check if rating already exists
+        const { data: existingRating } = await supabase
+            .from('ratings')
+            .select('rating')
+            .eq('userId', userId)
+            .eq('leaderId', leaderId)
+            .single();
 
-        // 2. Insert or update rating. createdAt is only set on the initial insert.
-        const upsertRatingStmt = db.prepare(`
-            INSERT INTO ratings (userId, leaderId, rating, createdAt, updatedAt, socialBehaviour)
-            VALUES (@userId, @leaderId, @rating, @createdAt, @updatedAt, @socialBehaviour)
-            ON CONFLICT(userId, leaderId) DO UPDATE SET
-            rating = excluded.rating,
-            updatedAt = excluded.updatedAt,
-            socialBehaviour = excluded.socialBehaviour
-        `);
-        upsertRatingStmt.run({ userId, leaderId, rating: newRating, createdAt: now, updatedAt: now, socialBehaviour });
+        // Insert or update rating
+        const { error: ratingError } = await supabase
+            .from('ratings')
+            .upsert({
+                userId,
+                leaderId,
+                rating: newRating,
+                createdAt: existingRating ? undefined : now,
+                updatedAt: now,
+                socialBehaviour
+            });
 
-        // 3. Handle comment
+        if (ratingError) {
+            console.error('Error upserting rating:', ratingError);
+            throw new Error('Failed to submit rating');
+        }
+
+        // Handle comment
         if (comment && comment.trim().length > 0) {
-            const upsertCommentStmt = db.prepare(`
-                INSERT INTO comments (userId, leaderId, comment, createdAt, updatedAt)
-                VALUES (@userId, @leaderId, @comment, @createdAt, @updatedAt)
-                ON CONFLICT(userId, leaderId) DO UPDATE SET
-                comment = excluded.comment,
-                updatedAt = excluded.updatedAt
-            `);
-            upsertCommentStmt.run({ userId, leaderId, comment, createdAt: now, updatedAt: now });
-        }
+            const { error: commentError } = await supabase
+                .from('comments')
+                .upsert({
+                    userId,
+                    leaderId,
+                    comment,
+                    createdAt: now,
+                    updatedAt: now
+                });
 
-        // 4. Update leader's aggregate rating
-        const leader = db.prepare('SELECT rating, reviewCount FROM leaders WHERE id = ?').get(leaderId) as { rating: number; reviewCount: number };
-        if (!leader) {
-            throw new Error("Leader not found during transaction.");
-        }
-
-        let newReviewCount = leader.reviewCount;
-        let newAverageRating = leader.rating;
-
-        if (existingRating) {
-            // User is updating their rating
-            const oldRatingValue = existingRating.rating;
-            if (leader.reviewCount > 0) {
-                newAverageRating = ((leader.rating * leader.reviewCount) - oldRatingValue + newRating) / leader.reviewCount;
-            } else {
-                newAverageRating = newRating; // Should not happen if reviewCount is consistent
+            if (commentError) {
+                console.error('Error upserting comment:', commentError);
             }
-        } else {
-            // New rating from this user
-            newReviewCount = leader.reviewCount + 1;
-            newAverageRating = ((leader.rating * leader.reviewCount) + newRating) / newReviewCount;
         }
 
-        const updateLeaderStmt = db.prepare('UPDATE leaders SET rating = ?, reviewCount = ? WHERE id = ?');
-        updateLeaderStmt.run(newAverageRating.toFixed(2), newReviewCount, leaderId);
-    });
+        // Update leader's aggregate rating
+        const { data: allRatings } = await supabase
+            .from('ratings')
+            .select('rating')
+            .eq('leaderId', leaderId);
 
-    try {
-        transaction();
+        if (allRatings && allRatings.length > 0) {
+            const totalRating = allRatings.reduce((sum, r) => sum + r.rating, 0);
+            const averageRating = totalRating / allRatings.length;
+
+            const { error: updateError } = await supabase
+                .from('leaders')
+                .update({
+                    rating: parseFloat(averageRating.toFixed(2)),
+                    review_count: allRatings.length
+                })
+                .eq('id', leaderId);
+
+            if (updateError) {
+                console.error('Error updating leader rating:', updateError);
+            }
+        }
+
         return getLeaderById(leaderId);
     } catch (error) {
         console.error("Failed to submit rating and comment:", error);
@@ -333,159 +297,209 @@ export async function submitRatingAndComment(leaderId: string, userId: string, n
     }
 }
 
-
 export async function getReviewsForLeader(leaderId: string): Promise<Review[]> {
-    const stmt = db.prepare(`
-        SELECT
-            r.rating,
-            r.updatedAt,
-            r.socialBehaviour,
-            c.comment,
-            u.name as userName
-        FROM ratings r
-        JOIN users u ON r.userId = u.id
-        LEFT JOIN comments c ON r.userId = c.userId AND r.leaderId = c.leaderId
-        WHERE r.leaderId = ?
-        ORDER BY r.updatedAt DESC
-    `);
+    const { data, error } = await supabase
+        .from('ratings')
+        .select(`
+            rating,
+            updatedAt,
+            socialBehaviour,
+            users!inner(name),
+            comments(comment)
+        `)
+        .eq('leaderId', leaderId)
+        .order('updatedAt', { ascending: false });
 
-    const reviews = stmt.all(leaderId) as any[];
-    return Promise.resolve(reviews.map(r => ({ ...r })));
+    if (error) {
+        console.error('Error fetching reviews:', error);
+        return [];
+    }
+
+    return (data || []).map(r => ({
+        userName: r.users?.name || 'Anonymous',
+        rating: r.rating,
+        comment: r.comments?.[0]?.comment || null,
+        updatedAt: r.updatedAt,
+        socialBehaviour: r.socialBehaviour
+    }));
 }
 
 export async function getRatingDistribution(leaderId: string): Promise<RatingDistribution[]> {
-    const stmt = db.prepare(`
-        SELECT rating, COUNT(rating) as count
-        FROM ratings
-        WHERE leaderId = ?
-        GROUP BY rating
-        ORDER BY rating DESC
-    `);
-    const results = stmt.all(leaderId) as RatingDistribution[];
-    return Promise.resolve(results);
+    const { data, error } = await supabase
+        .from('ratings')
+        .select('rating')
+        .eq('leaderId', leaderId);
+
+    if (error) {
+        console.error('Error fetching rating distribution:', error);
+        return [];
+    }
+
+    const distribution: { [key: number]: number } = {};
+    (data || []).forEach(r => {
+        distribution[r.rating] = (distribution[r.rating] || 0) + 1;
+    });
+
+    return Object.entries(distribution)
+        .map(([rating, count]) => ({ rating: parseInt(rating), count }))
+        .sort((a, b) => b.rating - a.rating);
 }
 
 export async function getSocialBehaviourDistribution(leaderId: string): Promise<SocialBehaviourDistribution[]> {
-    const stmt = db.prepare(`
-        SELECT socialBehaviour as name, COUNT(socialBehaviour) as count
-        FROM ratings
-        WHERE leaderId = ? AND socialBehaviour IS NOT NULL AND socialBehaviour != ''
-        GROUP BY socialBehaviour
-        ORDER BY count DESC
-    `);
-    const results = stmt.all(leaderId) as SocialBehaviourDistribution[];
-    return Promise.resolve(results.map(r => ({ ...r, name: r.name.charAt(0).toUpperCase() + r.name.slice(1).replace('-', ' ') })));
+    const { data, error } = await supabase
+        .from('ratings')
+        .select('socialBehaviour')
+        .eq('leaderId', leaderId)
+        .not('socialBehaviour', 'is', null)
+        .neq('socialBehaviour', '');
+
+    if (error) {
+        console.error('Error fetching social behaviour distribution:', error);
+        return [];
+    }
+
+    const distribution: { [key: string]: number } = {};
+    (data || []).forEach(r => {
+        if (r.socialBehaviour) {
+            distribution[r.socialBehaviour] = (distribution[r.socialBehaviour] || 0) + 1;
+        }
+    });
+
+    return Object.entries(distribution)
+        .map(([name, count]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1).replace('-', ' '),
+            count
+        }))
+        .sort((a, b) => b.count - a.count);
 }
 
-
 export async function getActivitiesForUser(userId: string): Promise<UserActivity[]> {
-    const stmt = db.prepare(`
-        SELECT
-            r.leaderId,
-            l.*, l.id as leader_id, l.name as leader_name, l.partyName as leader_partyName, l.gender as leader_gender, l.age as leader_age, l.photoUrl as leader_photoUrl, l.constituency as leader_constituency, l.nativeAddress as leader_nativeAddress, l.electionType as leader_electionType, l.location_state as leader_location_state, l.location_district as leader_location_district, l.rating as leader_rating, l.reviewCount as leader_reviewCount, l.previousElections as leader_previousElections, l.manifestoUrl as leader_manifestoUrl, l.twitterUrl as leader_twitterUrl, l.addedByUserId as leader_addedByUserId, l.createdAt as leader_createdAt, l.status as leader_status, l.adminComment as leader_adminComment,
-            r.rating,
-            r.updatedAt,
-            r.socialBehaviour,
-            c.comment,
-            u.name as userName
-        FROM ratings r
-        JOIN leaders l ON r.leaderId = l.id
-        JOIN users u ON r.userId = u.id
-        LEFT JOIN comments c ON r.userId = c.userId AND r.leaderId = c.leaderId
-        WHERE r.userId = ?
-        ORDER BY r.updatedAt DESC
-    `);
+    const { data, error } = await supabase
+        .from('ratings')
+        .select(`
+            leaderId,
+            rating,
+            updatedAt,
+            socialBehaviour,
+            users!inner(name),
+            leaders!inner(*),
+            comments(comment)
+        `)
+        .eq('userId', userId)
+        .order('updatedAt', { ascending: false });
 
-    const activities = stmt.all(userId) as any[];
+    if (error) {
+        console.error('Error fetching user activities:', error);
+        return [];
+    }
 
-    return Promise.resolve(activities.map(mapDbActivityToUserActivity));
+    return (data || []).map(activity => ({
+        leaderId: activity.leaderId,
+        leaderName: activity.leaders?.name || '',
+        leaderPhotoUrl: activity.leaders?.photo_url || '',
+        rating: activity.rating,
+        comment: activity.comments?.[0]?.comment || null,
+        updatedAt: activity.updatedAt,
+        socialBehaviour: activity.socialBehaviour,
+        userName: activity.users?.name || 'Anonymous',
+        leader: dbToLeader(activity.leaders)
+    }));
 }
 
 export async function getAllActivities(): Promise<UserActivity[]> {
-    const stmt = db.prepare(`
-        SELECT
-            r.leaderId,
-            l.*, l.id as leader_id, l.name as leader_name, l.partyName as leader_partyName, l.gender as leader_gender, l.age as leader_age, l.photoUrl as leader_photoUrl, l.constituency as leader_constituency, l.nativeAddress as leader_nativeAddress, l.electionType as leader_electionType, l.location_state as leader_location_state, l.location_district as leader_location_district, l.rating as leader_rating, l.reviewCount as leader_reviewCount, l.previousElections as leader_previousElections, l.manifestoUrl as leader_manifestoUrl, l.twitterUrl as leader_twitterUrl, l.addedByUserId as leader_addedByUserId, l.createdAt as leader_createdAt, l.status as leader_status, l.adminComment as leader_adminComment,
-            r.rating,
-            r.updatedAt,
-            r.socialBehaviour,
-            c.comment,
-            u.name as userName
-        FROM ratings r
-        JOIN leaders l ON r.leaderId = l.id
-        JOIN users u ON r.userId = u.id
-        LEFT JOIN comments c ON r.userId = c.userId AND r.leaderId = c.leaderId
-        ORDER BY r.updatedAt DESC
-    `);
+    const { data, error } = await supabase
+        .from('ratings')
+        .select(`
+            leaderId,
+            rating,
+            updatedAt,
+            socialBehaviour,
+            users!inner(name),
+            leaders!inner(*),
+            comments(comment)
+        `)
+        .order('updatedAt', { ascending: false });
 
-    const activities = stmt.all() as any[];
-    return Promise.resolve(activities.map(mapDbActivityToUserActivity));
+    if (error) {
+        console.error('Error fetching all activities:', error);
+        return [];
+    }
+
+    return (data || []).map(activity => ({
+        leaderId: activity.leaderId,
+        leaderName: activity.leaders?.name || '',
+        leaderPhotoUrl: activity.leaders?.photo_url || '',
+        rating: activity.rating,
+        comment: activity.comments?.[0]?.comment || null,
+        updatedAt: activity.updatedAt,
+        socialBehaviour: activity.socialBehaviour,
+        userName: activity.users?.name || 'Anonymous',
+        leader: dbToLeader(activity.leaders)
+    }));
 }
-
 
 export async function getLeadersAddedByUser(userId: string): Promise<Leader[]> {
-  const stmt = db.prepare('SELECT * FROM leaders WHERE addedByUserId = ? ORDER BY name ASC');
-  const dbLeaders = stmt.all(userId) as any[];
-  return Promise.resolve(dbLeaders.map(dbToLeader));
+    const { data, error } = await supabase
+        .from('leaders')
+        .select('*')
+        .eq('added_by_user_id', userId)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching leaders added by user:', error);
+        return [];
+    }
+
+    return (data || []).map(dbToLeader);
 }
 
-
 export async function getLeaderCount(filters?: { startDate?: string, endDate?: string, state?: string, constituency?: string }): Promise<number> {
-    let query = 'SELECT COUNT(*) as count FROM leaders';
-    const params: (string | number)[] = [];
-    const conditions: string[] = [];
+    let query = supabase.from('leaders').select('*', { count: 'exact', head: true });
 
     if (filters?.startDate && filters?.endDate) {
-        conditions.push('createdAt >= ? AND createdAt <= ?');
-        params.push(filters.startDate, filters.endDate);
+        query = query.gte('created_at', filters.startDate).lte('created_at', filters.endDate);
     }
     if (filters?.state) {
-        conditions.push('location_state = ?');
-        params.push(filters.state);
+        query = query.eq('location_state', filters.state);
     }
     if (filters?.constituency) {
-        conditions.push('constituency LIKE ?');
-        params.push(`%${filters.constituency}%`);
+        query = query.ilike('constituency', `%${filters.constituency}%`);
     }
 
-    if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
+    const { count, error } = await query;
+
+    if (error) {
+        console.error('Error getting leader count:', error);
+        return 0;
     }
-    const { count } = db.prepare(query).get(...params) as { count: number };
-    return Promise.resolve(count);
+
+    return count || 0;
 }
 
 export async function getRatingCount(filters?: { startDate?: string, endDate?: string, state?: string, constituency?: string }): Promise<number> {
-    let query = 'SELECT COUNT(r.leaderId) as count FROM ratings r';
-    const params: (string | number)[] = [];
-    const conditions: string[] = [];
-    let needsJoin = false;
+    let query = supabase.from('ratings').select('*', { count: 'exact', head: true });
 
     if (filters?.startDate && filters?.endDate) {
-        conditions.push('r.createdAt >= ? AND r.createdAt <= ?');
-        params.push(filters.startDate, filters.endDate);
+        query = query.gte('createdAt', filters.startDate).lte('createdAt', filters.endDate);
     }
-    if (filters?.state) {
-        needsJoin = true;
-        conditions.push('l.location_state = ?');
-        params.push(filters.state);
-    }
-    if (filters?.constituency) {
-        needsJoin = true;
-        conditions.push('l.constituency LIKE ?');
-        params.push(`%${filters.constituency}%`);
+    if (filters?.state || filters?.constituency) {
+        query = query.select('*, leaders!inner(*)', { count: 'exact', head: true });
+        if (filters?.state) {
+            query = query.eq('leaders.location_state', filters.state);
+        }
+        if (filters?.constituency) {
+            query = query.ilike('leaders.constituency', `%${filters.constituency}%`);
+        }
     }
 
-    if (needsJoin) {
-        query += ' JOIN leaders l ON r.leaderId = l.id';
+    const { count, error } = await query;
+
+    if (error) {
+        console.error('Error getting rating count:', error);
+        return 0;
     }
 
-    if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
-    }
-
-    const { count } = db.prepare(query).get(...params) as { count: number };
-    return Promise.resolve(count);
+    return count || 0;
 }
 
 // --- Admin Functions ---
@@ -496,114 +510,109 @@ export async function getLeadersForAdminPanel(filters: {
     constituency?: string;
     candidateName?: string;
 }): Promise<Leader[]> {
-  let query = `
-    SELECT l.*, u.name as userName
-    FROM leaders l
-    LEFT JOIN users u ON l.addedByUserId = u.id
-  `;
-  const params: (string | number)[] = [];
-  const conditions: string[] = [];
+    let query = supabase
+        .from('leaders')
+        .select(`
+            *,
+            users(name)
+        `);
 
-  if (filters.dateFrom && filters.dateTo) {
-    conditions.push('l.createdAt >= ? AND l.createdAt <= ?');
-    params.push(filters.dateFrom, filters.dateTo);
-  }
-  if (filters.state) {
-    conditions.push('l.location_state = ?');
-    params.push(filters.state);
-  }
-  if (filters.constituency) {
-    conditions.push('l.constituency LIKE ?');
-    params.push(`%${filters.constituency}%`);
-  }
-  if (filters.candidateName) {
-    conditions.push('l.name LIKE ?');
-    params.push(`%${filters.candidateName}%`);
-  }
+    if (filters.dateFrom && filters.dateTo) {
+        query = query.gte('created_at', filters.dateFrom).lte('created_at', filters.dateTo);
+    }
+    if (filters.state) {
+        query = query.eq('location_state', filters.state);
+    }
+    if (filters.constituency) {
+        query = query.ilike('constituency', `%${filters.constituency}%`);
+    }
+    if (filters.candidateName) {
+        query = query.ilike('name', `%${filters.candidateName}%`);
+    }
 
-  if (conditions.length > 0) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
+    query = query.order('created_at', { ascending: false });
 
-  query += ' ORDER BY l.createdAt DESC';
+    const { data, error } = await query;
 
-  const stmt = db.prepare(query);
-  const dbLeaders = stmt.all(...params) as any[];
-  return Promise.resolve(dbLeaders.map(dbToLeader));
+    if (error) {
+        console.error('Error fetching leaders for admin:', error);
+        return [];
+    }
+
+    return (data || []).map(leader => ({
+        ...dbToLeader(leader),
+        userName: leader.users?.name
+    }));
 }
 
-
 export async function approveLeader(leaderId: string): Promise<void> {
-  const stmt = db.prepare("UPDATE leaders SET status = 'approved', adminComment = 'Approved by admin.' WHERE id = ?");
-  stmt.run(leaderId);
-  return Promise.resolve();
+    const { error } = await supabase
+        .from('leaders')
+        .update({
+            status: 'approved',
+            admin_comment: 'Approved by admin.'
+        })
+        .eq('id', leaderId);
+
+    if (error) {
+        console.error('Error approving leader:', error);
+        throw new Error('Failed to approve leader');
+    }
 }
 
 export async function updateLeaderStatus(leaderId: string, status: 'pending' | 'approved' | 'rejected', adminComment: string | null): Promise<void> {
-  const stmt = db.prepare("UPDATE leaders SET status = ?, adminComment = ? WHERE id = ?");
-  stmt.run(status, adminComment, leaderId);
-  return Promise.resolve();
+    const { error } = await supabase
+        .from('leaders')
+        .update({
+            status,
+            admin_comment: adminComment
+        })
+        .eq('id', leaderId);
+
+    if (error) {
+        console.error('Error updating leader status:', error);
+        throw new Error('Failed to update leader status');
+    }
 }
 
 export async function deleteLeader(leaderId: string): Promise<void> {
-    const transaction = db.transaction((id: string) => {
-        // Explicitly delete dependent records first to ensure foreign key constraints are met.
-        db.prepare('DELETE FROM ratings WHERE leaderId = ?').run(id);
-        db.prepare('DELETE FROM comments WHERE leaderId = ?').run(id);
+    // Delete dependent records first
+    await supabase.from('ratings').delete().eq('leaderId', leaderId);
+    await supabase.from('comments').delete().eq('leaderId', leaderId);
 
-        // Now delete the leader.
-        db.prepare('DELETE FROM leaders WHERE id = ?').run(id);
-    });
+    // Delete the leader
+    const { error } = await supabase
+        .from('leaders')
+        .delete()
+        .eq('id', leaderId);
 
-    try {
-        transaction(leaderId);
-    } catch (error) {
-        console.error("Failed to delete leader and associated data:", error);
-        throw error;
+    if (error) {
+        console.error('Error deleting leader:', error);
+        throw new Error('Failed to delete leader');
     }
 }
 
 export async function deleteRating(userId: string, leaderId: string): Promise<void> {
-    const transaction = db.transaction(() => {
-        // 1. Get the rating value before deleting
-        const ratingStmt = db.prepare('SELECT rating FROM ratings WHERE userId = ? AND leaderId = ?');
-        const ratingToDelete = ratingStmt.get(userId, leaderId) as { rating: number } | undefined;
+    // Delete rating and comment
+    await supabase.from('ratings').delete().eq('userId', userId).eq('leaderId', leaderId);
+    await supabase.from('comments').delete().eq('userId', userId).eq('leaderId', leaderId);
 
-        if (!ratingToDelete) {
-            // Nothing to delete, maybe already deleted.
-            return;
-        }
+    // Recalculate leader's rating
+    const { data: allRatings } = await supabase
+        .from('ratings')
+        .select('rating')
+        .eq('leaderId', leaderId);
 
-        // 2. Delete from ratings and comments
-        db.prepare('DELETE FROM ratings WHERE userId = ? AND leaderId = ?').run(userId, leaderId);
-        db.prepare('DELETE FROM comments WHERE userId = ? AND leaderId = ?').run(userId, leaderId);
+    const newReviewCount = allRatings?.length || 0;
+    const newAverageRating = newReviewCount > 0
+        ? (allRatings?.reduce((sum, r) => sum + r.rating, 0) || 0) / newReviewCount
+        : 0;
 
-        // 3. Recalculate leader's average rating
-        const leader = db.prepare('SELECT rating, reviewCount FROM leaders WHERE id = ?').get(leaderId) as { rating: number; reviewCount: number };
-        if (!leader) {
-            // Leader might have been deleted concurrently, which is fine.
-            return;
-        }
-
-        const newReviewCount = leader.reviewCount - 1;
-        let newAverageRating = 0;
-
-        if (newReviewCount > 0) {
-            // (Total Score - Deleted Score) / New Count
-            newAverageRating = ((leader.rating * leader.reviewCount) - ratingToDelete.rating) / newReviewCount;
-        }
-        // If newReviewCount is 0, newAverageRating remains 0, which is correct.
-
-        // 4. Update the leader
-        const updateLeaderStmt = db.prepare('UPDATE leaders SET rating = ?, reviewCount = ? WHERE id = ?');
-        updateLeaderStmt.run(newAverageRating.toFixed(2), newReviewCount, leaderId);
-    });
-
-    try {
-        transaction();
-        return Promise.resolve();
-    } catch (error) {
-        console.error("Failed to delete rating:", error);
-        throw error;
-    }
+    await supabase
+        .from('leaders')
+        .update({
+            rating: parseFloat(newAverageRating.toFixed(2)),
+            review_count: newReviewCount
+        })
+        .eq('id', leaderId);
 }
