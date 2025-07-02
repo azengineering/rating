@@ -1,4 +1,3 @@
-
 'use server';
 
 import { supabase } from '@/lib/db';
@@ -60,7 +59,7 @@ type NotificationPayload = Omit<SiteNotification, 'id' | 'createdAt'>;
 export async function addNotification(data: NotificationPayload): Promise<SiteNotification> {
     const id = new Date().getTime().toString();
     const createdAt = new Date().toISOString();
-    
+
     const { error } = await supabase
         .from('notifications')
         .insert({
