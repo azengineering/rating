@@ -112,8 +112,6 @@ export async function addUser(user: Omit<User, 'id' | 'createdAt'>): Promise<Use
         name: formattedName,
         created_at: createdAt,
         is_blocked: false,
-        blocked_until: null,
-        block_reason: null,
     };
 
     const { data, error } = await supabase
