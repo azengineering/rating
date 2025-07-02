@@ -110,7 +110,6 @@ export async function addUser(user: Omit<User, 'id' | 'createdAt'>): Promise<Use
         email: user.email.toLowerCase(),
         password: user.password || '',
         name: formattedName,
-        created_at: createdAt,
         is_blocked: false,
     };
 
