@@ -39,7 +39,7 @@ export async function getUsers(searchTerm?: string): Promise<User[]> {
         let query = supabase.from('users').select(`
             *,
             ratings(count),
-            leaders(count),
+            leaders!leaders_added_by_user_id_fkey(count),
             admin_messages(count)
         `);
 

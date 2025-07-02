@@ -1,4 +1,3 @@
-
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -80,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!existingUser) {
       throw new Error("An account with this email does not exist. Please sign up first.");
     }
-    
+
     if (existingUser.password !== password) {
       throw new Error('Invalid email or password.');
     }
@@ -96,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(`BLOCKED::${existingUser.blockReason}::${existingUser.blockedUntil}`);
       }
     }
-    
+
     handleSuccessfulLogin(existingUser, redirectPath);
   };
 
@@ -129,13 +128,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let userInDb = await findUserByEmail(googleUser.email);
-    
+
     if (userInDb) {
       // User exists, check for block
       if (userInDb.isBlocked) {
         if (userInDb.blockedUntil && isAfter(new Date(), new Date(userInDb.blockedUntil))) {
-            await unblockUser(userInDb.id);
-            userInDb = (await findUserByEmail(googleUser.email))!;
+            // Ban has expired, unblock and continue login
+        await unblockUser(userInDb.id);
+        const refreshedUser = await findUserByEmail(googleUser.email);
+        if (!refreshedUser) {
+          throw new Error('User not found after unblocking');
+        }
+        userInDb = refreshedUser;
         } else {
              throw new Error(`BLOCKED::${userInDb.blockReason}::${userInDb.blockedUntil}`);
         }
@@ -151,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Failed to create a new user account.");
       }
     }
-    
+
     handleSuccessfulLogin(userInDb, redirectPath);
   };
 
@@ -166,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) {
       throw new Error("User not authenticated");
     }
-    
+
     const updatedUser = await updateUserProfile(user.id, profileData);
 
     if (updatedUser) {
