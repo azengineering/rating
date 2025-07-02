@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 export interface SiteSettings {
     maintenance_active: 'true' | 'false';
@@ -35,11 +35,17 @@ const defaultSettings: SiteSettings = {
  */
 export async function getSiteSettings(): Promise<SiteSettings> {
     try {
-        const stmt = db.prepare('SELECT key, value FROM site_settings');
-        const rows = stmt.all() as { key: string; value: string }[];
+        const { data, error } = await supabase
+            .from('site_settings')
+            .select('key, value');
+        
+        if (error) {
+            console.error("Failed to get site settings:", error);
+            return defaultSettings;
+        }
         
         const settings: Partial<SiteSettings> = {};
-        for (const row of rows) {
+        for (const row of data || []) {
             settings[row.key as keyof SiteSettings] = row.value as any;
         }
         
@@ -58,20 +64,20 @@ export async function getSiteSettings(): Promise<SiteSettings> {
  * @returns A promise that resolves when the settings have been updated.
  */
 export async function updateSiteSettings(settings: Partial<SiteSettings>): Promise<void> {
-    const stmt = db.prepare(`
-        INSERT INTO site_settings (key, value)
-        VALUES (@key, @value)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `);
-
-    const transaction = db.transaction((settingsToUpdate: Partial<SiteSettings>) => {
-        for (const [key, value] of Object.entries(settingsToUpdate)) {
-            stmt.run({ key, value: String(value) });
-        }
-    });
-
     try {
-        transaction(settings);
+        const updates = Object.entries(settings).map(([key, value]) => ({
+            key,
+            value: String(value)
+        }));
+
+        const { error } = await supabase
+            .from('site_settings')
+            .upsert(updates, { onConflict: 'key' });
+
+        if (error) {
+            console.error("Failed to update site settings:", error);
+            throw new Error("Database transaction for updating settings failed.");
+        }
     } catch (error) {
         console.error("Failed to update site settings:", error);
         throw new Error("Database transaction for updating settings failed.");
