@@ -2,7 +2,6 @@
 'use server';
 
 import { supabase } from '@/lib/db';
-import bcrypt from 'bcryptjs';
 
 // For a real app, passwords should be securely hashed.
 // For this prototype, we'll store them as-is.
@@ -83,30 +82,6 @@ export async function findUserByEmail(email: string): Promise<User | undefined> 
     return data || undefined;
 }
 
-export async function verifyPassword(email: string, password: string): Promise<User | null> {
-    const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email.toLowerCase())
-        .single();
-
-    if (error || !data) {
-        return null;
-    }
-
-    // Check if password matches
-    const isValidPassword = await bcrypt.compare(password, data.password || '');
-    
-    if (!isValidPassword) {
-        return null;
-    }
-
-    // Remove password from returned user object
-    const userWithoutPassword = { ...data };
-    delete userWithoutPassword.password;
-    return userWithoutPassword;
-}
-
 export async function findUserById(id: string): Promise<User | undefined> {
     const { data, error } = await supabase
         .from('users')
@@ -130,17 +105,10 @@ export async function addUser(user: Omit<User, 'id' | 'createdAt'>): Promise<Use
     const id = new Date().getTime().toString();
     const createdAt = new Date().toISOString();
     
-    // Hash the password if provided
-    let hashedPassword = '';
-    if (user.password) {
-        const saltRounds = 12;
-        hashedPassword = await bcrypt.hash(user.password, saltRounds);
-    }
-    
     const newUser = {
         id,
         email: user.email.toLowerCase(),
-        password: hashedPassword,
+        password: user.password || '',
         name: formattedName,
         is_blocked: false,
     };
@@ -189,28 +157,6 @@ export async function updateUserProfile(userId: string, profileData: Partial<Use
     }
 
     return await findUserById(userId);
-}
-
-export async function updateUserPassword(userId: string, newPassword: string): Promise<boolean> {
-    try {
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-        
-        const { error } = await supabase
-            .from('users')
-            .update({ password: hashedPassword })
-            .eq('id', userId);
-
-        if (error) {
-            console.error("Error updating password:", error);
-            return false;
-        }
-
-        return true;
-    } catch (error) {
-        console.error("Error hashing password:", error);
-        return false;
-    }
 }
 
 export async function getUserCount(filters?: { startDate?: string, endDate?: string, state?: string, constituency?: string }): Promise<number> {

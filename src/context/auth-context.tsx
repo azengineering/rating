@@ -1,8 +1,9 @@
+
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { findUserByEmail, addUser as addNewUser, updateUserProfile, type User, findUserById, unblockUser, verifyPassword } from '@/data/users';
+import { findUserByEmail, addUser as addNewUser, updateUserProfile, type User, findUserById, unblockUser } from '@/data/users';
 import { isAfter } from 'date-fns';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, firebaseEnabled } from '@/lib/firebase';
@@ -74,25 +75,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string, redirectPath?: string | null) => {
-    const user = await verifyPassword(email, password);
+    let existingUser = await findUserByEmail(email);
 
-    if (!user) {
+    if (!existingUser) {
+      throw new Error("An account with this email does not exist. Please sign up first.");
+    }
+    
+    if (existingUser.password !== password) {
       throw new Error('Invalid email or password.');
     }
 
     // Check if user is blocked
-    if (user.isBlocked) {
-      if (user.blockedUntil && isAfter(new Date(), new Date(user.blockedUntil))) {
+    if (existingUser.isBlocked) {
+      if (existingUser.blockedUntil && isAfter(new Date(), new Date(existingUser.blockedUntil))) {
         // Ban has expired, unblock and continue login
-        await unblockUser(user.id);
-        user = (await findUserByEmail(email))!; // Refetch user data
+        await unblockUser(existingUser.id);
+        existingUser = (await findUserByEmail(email))!; // Refetch user data
       } else {
         // Active ban, prevent login by throwing a specific error
-        throw new Error(`BLOCKED::${user.blockReason}::${user.blockedUntil}`);
+        throw new Error(`BLOCKED::${existingUser.blockReason}::${existingUser.blockedUntil}`);
       }
     }
-
-    handleSuccessfulLogin(user, redirectPath);
+    
+    handleSuccessfulLogin(existingUser, redirectPath);
   };
 
   const signup = async (email: string, password: string) => {
@@ -124,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let userInDb = await findUserByEmail(googleUser.email);
-
+    
     if (userInDb) {
       // User exists, check for block
       if (userInDb.isBlocked) {
@@ -146,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Failed to create a new user account.");
       }
     }
-
+    
     handleSuccessfulLogin(userInDb, redirectPath);
   };
 
@@ -161,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) {
       throw new Error("User not authenticated");
     }
-
+    
     const updatedUser = await updateUserProfile(user.id, profileData);
 
     if (updatedUser) {
