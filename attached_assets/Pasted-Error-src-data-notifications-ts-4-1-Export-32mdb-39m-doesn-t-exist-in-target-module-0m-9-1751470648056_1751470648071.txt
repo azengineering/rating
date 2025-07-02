@@ -1,0 +1,25 @@
+Error: ./src/data/notifications.ts:4:1
+Export [32mdb[39m doesn't exist in target module
+[0m [90m 2 |[39m [32m'use server'[39m[33m;[39m[0m
+[0m [90m 3 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 4 |[39m [36mimport[39m { db } [36mfrom[39m [32m'@/lib/db'[39m[33m;[39m[0m
+[0m [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[0m
+[0m [90m 5 |[39m [36mimport[39m type { [33mRunResult[39m } [36mfrom[39m [32m'better-sqlite3'[39m[33m;[39m[0m
+[0m [90m 6 |[39m[0m
+[0m [90m 7 |[39m [36mexport[39m [36minterface[39m [33mSiteNotification[39m {[0m
+
+The export [32mdb[39m was not found in module [1m[31m[project]/src/lib/db.ts [app-rsc] (ecmascript)[39m[22m.
+Did you mean to import [32msupabase[39m?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+    at BuildError (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/%5Broot-of-the-server%5D__e2c08166._.js:17395:41)
+    at renderWithHooks (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:13260:28)
+    at updateFunctionComponent (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:16755:32)
+    at beginWork (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:18388:32)
+    at beginWork$1 (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:23101:28)
+    at performUnitOfWork (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:22402:24)
+    at workLoopSync (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:22331:17)
+    at renderRootSync (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:22308:21)
+    at performConcurrentWorkOnRoot (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_ab7e073c.js:21732:84)
+    at workLoop (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_3bfdc6a4._.js:291:48)
+    at flushWork (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_3bfdc6a4._.js:270:28)
+    at MessagePort.performWorkUntilDeadline (https://58ba0a34-bd17-4a07-9311-103b215f942c-00-1rsa5apm6zn40.pike.replit.dev/_next/static/chunks/node_modules_3bfdc6a4._.js:498:35)
